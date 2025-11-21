@@ -40,6 +40,7 @@ public class UserService {
                         user.getId(),
                         user.getName(),
                         user.getEmail(),
+                        user.getPhoneNumber(),
                         user.getRole(),
                         Map.of(
                                 "school", user.getStudent().getSchool(),
@@ -51,6 +52,7 @@ public class UserService {
                         user.getId(),
                         user.getName(),
                         user.getEmail(),
+                        user.getPhoneNumber(),
                         user.getRole(),
                         Map.of(
                                 "school", user.getTeacher().getSchool(),
@@ -62,6 +64,7 @@ public class UserService {
                         user.getId(),
                         user.getName(),
                         user.getEmail(),
+                        user.getPhoneNumber(),
                         user.getRole(),
                         null
                 );
@@ -99,36 +102,4 @@ public class UserService {
         return savedUser;
     }
 
-    // ---------------- LOGIN ----------------
-    public User loginUser(String email, String password) {
-        Optional<User> optionalUser = userRepository.findByEmail(email);
-        if (optionalUser.isEmpty()) {
-            throw new RuntimeException("User not found!");
-        }
-
-        User user = optionalUser.get();
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new RuntimeException("Invalid password!");
-        }
-
-        return user;
-    }
-
-    // ---------------- GOOGLE LOGIN ----------------
-    public User loginWithGoogle(String googleId, String email, String name, String profilePhoto) {
-        Optional<User> optionalUser = userRepository.findByEmail(email);
-
-        if (optionalUser.isPresent()) {
-            return optionalUser.get(); // already exists
-        }
-
-        // create new Google user
-        User newUser = new User();
-        newUser.setGoogleId(googleId);
-        newUser.setEmail(email);
-        newUser.setName(name);
-        newUser.setProfilePhoto(profilePhoto);
-        newUser.setRole(Role.STUDENT); // default role
-        return userRepository.save(newUser);
-    }
 }

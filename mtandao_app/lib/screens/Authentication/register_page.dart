@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:mtandao_app/services/auth_service.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -24,12 +25,23 @@ class _RegisterpageState extends State<Registerpage>
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
 
+  // Text editing controllers
   final nameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
   final phoneController = TextEditingController();
   final schoolController = TextEditingController();
+
+  // New teacher-specific controllers
+  final qualificationController = TextEditingController();
+  final experienceController = TextEditingController();
+
+  // Subjects management
+  List<String> selectedSubjects = [];
+  final TextEditingController _subjectController = TextEditingController();
+
+  final AuthService _authService = AuthService();
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -39,7 +51,7 @@ class _RegisterpageState extends State<Registerpage>
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
 
-  // dropdown data
+  // Dropdown data
   final List<String> levels = ['Primary', 'O-Level', 'A-Level'];
   final Map<String, List<String>> subLevels = {
     'Primary': [
@@ -54,6 +66,24 @@ class _RegisterpageState extends State<Registerpage>
     'O-Level': ['Form 1', 'Form 2', 'Form 3', 'Form 4'],
     'A-Level': ['Form 5', 'Form 6'],
   };
+
+  // Common subjects for teachers
+  final List<String> commonSubjects = [
+    'Mathematics',
+    'Physics',
+    'Chemistry',
+    'Biology',
+    'English',
+    'Kiswahili',
+    'History',
+    'Geography',
+    'Civics',
+    'Computer Science',
+    'Commerce',
+    'Book Keeping',
+    'Bible Knowledge',
+    'Islamic Knowledge',
+  ];
 
   @override
   void initState() {
@@ -87,51 +117,106 @@ class _RegisterpageState extends State<Registerpage>
     confirmController.dispose();
     phoneController.dispose();
     schoolController.dispose();
+    qualificationController.dispose();
+    experienceController.dispose();
+    _subjectController.dispose();
     super.dispose();
   }
 
+  void _addSubject() {
+    final subject = _subjectController.text.trim();
+    if (subject.isNotEmpty && !selectedSubjects.contains(subject)) {
+      setState(() {
+        selectedSubjects.add(subject);
+        _subjectController.clear();
+      });
+    }
+  }
+
+  void _removeSubject(String subject) {
+    setState(() {
+      selectedSubjects.remove(subject);
+    });
+  }
+
+  void _selectCommonSubject(String subject) {
+    if (!selectedSubjects.contains(subject)) {
+      setState(() {
+        selectedSubjects.add(subject);
+      });
+    }
+  }
+
   Future<void> _register() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+    if (!_formKey.currentState!.validate()) return;
 
-      try {
-        // Prepare registration data
-        final Map<String, dynamic> registrationData = {
-          'name': nameController.text.trim(),
-          'email': emailController.text.trim(),
-          'password': passwordController.text,
-          'userType': role.toLowerCase(),
-          'phoneNumber': phoneController.text.trim(),
-          'school': schoolController.text.trim(),
-        };
+    // Additional validation for teacher fields
+    if (role == 'Teacher') {
+      if (qualificationController.text.isEmpty) {
+        _showErrorSnackBar('Please enter your qualification');
+        return;
+      }
+      if (experienceController.text.isEmpty) {
+        _showErrorSnackBar('Please enter your teaching experience');
+        return;
+      }
+      if (selectedSubjects.isEmpty) {
+        _showErrorSnackBar('Please add at least one subject you teach');
+        return;
+      }
+    }
 
-        // Add education level for students
-        if (role == 'Student') {
-          registrationData['level'] = subLevel ?? level;
-        }
+    setState(() => _isLoading = true);
 
-        final response = await http.post(
-          Uri.parse('https://your-api-domain.com/api/auth/register'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(registrationData),
+    final Map<String, dynamic> body = {
+      'name': nameController.text.trim(),
+      'email': emailController.text.trim(),
+      'password': passwordController.text.trim(),
+      'role': role.toUpperCase(), // matches backend enum (STUDENT/TEACHER)
+      'school': schoolController.text.trim(),
+      'phoneNumber': phoneController.text.trim(),
+      if (role == 'Student') ...{
+        'level': level, // e.g. "O-Level" or "Primary"
+        'sub_level': subLevel, // e.g. "Form 2" or "Standard 7"
+      },
+      if (role == 'Teacher') ...{
+        'qualification': qualificationController.text.trim(),
+        'experience': experienceController.text.trim(),
+        'subjects': selectedSubjects,
+      },
+    };
+
+    try {
+      final success = await _authService.register(body);
+      if (success && mounted) {
+        final prefs = await SharedPreferences.getInstance();
+        final role = prefs.getString('role');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Registration successful!'),
+            backgroundColor: Colors.green,
+          ),
         );
 
-        if (response.statusCode == 201) {
-          final Map<String, dynamic> responseData = json.decode(response.body);
-          await _handleRegistrationSuccess(responseData);
-        } else if (response.statusCode == 409) {
-          _handleRegistrationError(
-            'Email already exists. Please login instead.',
+        if (role == 'TEACHER') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const TeacherDashboard()),
           );
         } else {
-          _handleRegistrationError('Registration failed. Please try again.');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomePage()),
+          );
         }
-      } catch (error) {
-        print('Registration error: $error');
-        _handleRegistrationError(
-          'Network error. Please check your connection.',
-        );
+      } else {
+        _showErrorSnackBar('Registration failed, please try again.');
       }
+    } catch (e) {
+      _showErrorSnackBar('Error: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -139,6 +224,7 @@ class _RegisterpageState extends State<Registerpage>
     setState(() => _isLoading = true);
 
     try {
+      final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email']);
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
@@ -146,123 +232,38 @@ class _RegisterpageState extends State<Registerpage>
         return;
       }
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final googleAuth = await googleUser.authentication;
+      final success = await _authService.googleLogin(googleAuth.idToken!);
 
-      // Get Google user data
-      final Map<String, dynamic> googleUserData = {
-        'email': googleUser.email,
-        'name': googleUser.displayName,
-        'photoUrl': googleUser.photoUrl,
-        'googleId': googleUser.id,
-      };
+      if (success && mounted) {
+        final prefs = await SharedPreferences.getInstance();
+        final role = prefs.getString('role');
 
-      // Send Google token to your backend
-      final response = await http.post(
-        Uri.parse('https://your-api-domain.com/api/auth/google-register'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'token': googleAuth.idToken,
-          'userType': role.toLowerCase(),
-          'googleUserData': googleUserData,
-        }),
-      );
-
-      if (response.statusCode == 201) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
-        await _handleGoogleRegistrationSuccess(responseData);
-      } else {
-        _handleRegistrationError('Google Sign-Up failed. Please try again.');
-      }
-    } catch (error) {
-      print('Google Sign-Up error: $error');
-      _handleRegistrationError('Google Sign-Up failed. Please try again.');
-    }
-  }
-
-  Future<void> _handleRegistrationSuccess(
-    Map<String, dynamic> responseData,
-  ) async {
-    // Save user data to shared preferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', responseData['token']);
-    await prefs.setString('userType', responseData['user']['userType']);
-    await prefs.setString('userId', responseData['user']['id']);
-    await prefs.setString('email', responseData['user']['email']);
-    await prefs.setString('name', responseData['user']['name']);
-    await prefs.setBool(
-      'profileCompleted',
-      responseData['user']['profileCompleted'] ?? true,
-    );
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Registration successful!'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-
-      // Navigate to dashboard
-      _navigateToDashboard(responseData['user']['userType']);
-    }
-  }
-
-  Future<void> _handleGoogleRegistrationSuccess(
-    Map<String, dynamic> responseData,
-  ) async {
-    // Save user data to shared preferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', responseData['token']);
-    await prefs.setString('userType', responseData['user']['userType']);
-    await prefs.setString('userId', responseData['user']['id']);
-    await prefs.setString('email', responseData['user']['email']);
-    await prefs.setString('name', responseData['user']['name']);
-    await prefs.setBool(
-      'profileCompleted',
-      responseData['user']['profileCompleted'] ?? false,
-    );
-    await prefs.setBool('isGoogleUser', true);
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-
-      // Check if profile needs completion
-      if (responseData['user']['profileCompleted'] == true) {
-        _navigateToDashboard(responseData['user']['userType']);
-      } else {
-        // Redirect to profile completion page
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => ProfileCompletionPage()),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Google Sign-in successful!'),
+            backgroundColor: Colors.green,
+          ),
         );
+
+        if (role == 'TEACHER') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const TeacherDashboard()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomePage()),
+          );
+        }
+      } else {
+        _showErrorSnackBar('Google Sign-in failed.');
       }
-    }
-  }
-
-  void _handleRegistrationError(String message) {
-    if (mounted) {
+    } catch (e) {
+      _showErrorSnackBar('Error: $e');
+    } finally {
       setState(() => _isLoading = false);
-      _showErrorSnackBar(message);
-    }
-  }
-
-  void _navigateToDashboard(String userType) {
-    if (userType.toLowerCase() == 'teacher') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const TeacherDashboard()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
-      );
     }
   }
 
@@ -392,6 +393,7 @@ class _RegisterpageState extends State<Registerpage>
                                     role = index == 0 ? 'Student' : 'Teacher';
                                     level = null;
                                     subLevel = null;
+                                    selectedSubjects.clear();
                                   });
                                 },
                                 selectedColor: Colors.white,
@@ -492,6 +494,186 @@ class _RegisterpageState extends State<Registerpage>
                               },
                             ),
                             const SizedBox(height: 20),
+
+                            // Teacher-specific fields
+                            if (role == 'Teacher') ...[
+                              _buildTextField(
+                                'Qualification',
+                                qualificationController,
+                                Icons.school_outlined,
+                                hintText: 'e.g., B.Ed Mathematics, MSc Physics',
+                                validator: (val) {
+                                  if (val == null || val.isEmpty) {
+                                    return 'Please enter your qualification';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+
+                              _buildTextField(
+                                'Teaching Experience',
+                                experienceController,
+                                Icons.work_outline,
+                                hintText: 'e.g., 5 years',
+                                validator: (val) {
+                                  if (val == null || val.isEmpty) {
+                                    return 'Please enter your teaching experience';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+
+                              // Subjects Section
+                              const Text(
+                                'Subjects You Teach',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Add subjects you are qualified to teach:',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Add subject input
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      controller: _subjectController,
+                                      decoration: InputDecoration(
+                                        hintText: 'Enter subject name',
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 15,
+                                              vertical: 12,
+                                            ),
+                                      ),
+                                      onFieldSubmitted: (_) => _addSubject(),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: primaryColor,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: IconButton(
+                                      onPressed: _addSubject,
+                                      icon: const Icon(
+                                        Icons.add,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+
+                              // Common subjects quick selection
+                              SizedBox(
+                                height: 40,
+                                child: ListView(
+                                  scrollDirection: Axis.horizontal,
+                                  children:
+                                      commonSubjects.map((subject) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 8,
+                                          ),
+                                          child: FilterChip(
+                                            label: Text(subject),
+                                            selected: selectedSubjects.contains(
+                                              subject,
+                                            ),
+                                            onSelected: (selected) {
+                                              if (selected) {
+                                                _selectCommonSubject(subject);
+                                              } else {
+                                                _removeSubject(subject);
+                                              }
+                                            },
+                                            backgroundColor: Colors.grey[200],
+                                            selectedColor: primaryColor
+                                                .withOpacity(0.2),
+                                            labelStyle: TextStyle(
+                                              color:
+                                                  selectedSubjects.contains(
+                                                        subject,
+                                                      )
+                                                      ? primaryColor
+                                                      : Colors.black87,
+                                              fontWeight:
+                                                  selectedSubjects.contains(
+                                                        subject,
+                                                      )
+                                                      ? FontWeight.bold
+                                                      : FontWeight.normal,
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Selected subjects display
+                              if (selectedSubjects.isNotEmpty) ...[
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children:
+                                      selectedSubjects.map((subject) {
+                                        return Chip(
+                                          label: Text(subject),
+                                          backgroundColor: primaryColor
+                                              .withOpacity(0.1),
+                                          deleteIcon: const Icon(
+                                            Icons.close,
+                                            size: 16,
+                                          ),
+                                          onDeleted:
+                                              () => _removeSubject(subject),
+                                        );
+                                      }).toList(),
+                                ),
+                                const SizedBox(height: 16),
+                              ] else ...[
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'No subjects added yet. Add subjects you teach.',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ],
 
                             // Password Field
                             _buildPasswordField(
@@ -670,9 +852,9 @@ class _RegisterpageState extends State<Registerpage>
                                                   ),
                                             ),
                                           )
-                                          : const Text(
-                                            'Create Account',
-                                            style: TextStyle(
+                                          : Text(
+                                            'Create ${role} Account',
+                                            style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 16,
                                             ),
@@ -804,12 +986,14 @@ class _RegisterpageState extends State<Registerpage>
     IconData icon, {
     TextInputType keyboard = TextInputType.text,
     String? Function(String?)? validator,
+    String? hintText,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboard,
       decoration: InputDecoration(
         labelText: label,
+        hintText: hintText,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         prefixIcon: Icon(icon),
       ),

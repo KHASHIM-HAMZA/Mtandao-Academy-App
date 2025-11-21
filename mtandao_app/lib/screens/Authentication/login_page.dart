@@ -5,6 +5,7 @@ import 'package:mtandao_app/screens/student/home_page.dart';
 import 'package:mtandao_app/screens/teacher/TeacherDashboard.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:mtandao_app/services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -161,38 +162,136 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
+  final AuthService _authService = AuthService();
+
   Future<void> _login() async {
-    if (!_validateForm()) {
-      return;
-    }
+    if (!_validateForm()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse('https://your-api-domain.com/api/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'email': emailController.text.trim(),
-          'password': passwordController.text,
-          'userType': userType.toLowerCase(),
-        }),
+      final success = await _authService.login(
+        emailController.text.trim(),
+        passwordController.text,
       );
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
-        await _handleLoginSuccess(responseData);
-      } else if (response.statusCode == 401) {
-        _handleLoginError('Invalid email or password');
-      } else if (response.statusCode == 404) {
-        _handleLoginError('Account not found. Please create an account.');
+      if (success) {
+        final prefs = await SharedPreferences.getInstance();
+        final role = prefs.getString('role');
+        final email = prefs.getString('email') ?? '';
+        final name = prefs.getString('name') ?? '';
+
+        // Validate user type selection matches actual role
+        final bool isTeacherSelected = userType == 'Teacher';
+        final bool isActualTeacher = role == 'TEACHER';
+        final bool isActualStudent = role == 'STUDENT';
+
+        // Role validation
+        if ((isTeacherSelected && !isActualTeacher) ||
+            (!isTeacherSelected && !isActualStudent)) {
+          // Show detailed error dialog
+          await _showRoleMismatchDialog(
+            selectedType: userType,
+            actualType: isActualTeacher ? 'Teacher' : 'Student',
+            email: email,
+            name: name,
+          );
+
+          // Clear the invalid login data
+          await _authService.logout();
+          return;
+        }
+
+        // Successful login with correct role
+        _showSuccessSnackBar('Welcome back, $name!');
+
+        // Navigate based on role
+        if (isActualTeacher) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const TeacherDashboard()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomePage()),
+          );
+        }
       } else {
-        _handleLoginError('Login failed. Please try again.');
+        _showErrorSnackBar('Invalid credentials or user not found.');
       }
-    } catch (error) {
-      print('Login error: $error');
-      _handleLoginError('Network error. Please check your connection.');
+    } catch (e) {
+      _showErrorSnackBar(
+        'Login error: Please check your connection and try again.',
+      );
+    } finally {
+      setState(() => _isLoading = false);
     }
+  }
+
+  // Show role mismatch dialog
+  Future<void> _showRoleMismatchDialog({
+    required String selectedType,
+    required String actualType,
+    required String email,
+    required String name,
+  }) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Account Type Mismatch'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You selected "$selectedType" but your account "$email" is registered as a "$actualType".',
+                  style: TextStyle(fontSize: 14),
+                ),
+                SizedBox(height: 12),
+                Text('Please:', style: TextStyle(fontWeight: FontWeight.bold)),
+                SizedBox(height: 8),
+                Text('• Go back to login'),
+                Text('• Select "$actualType" as your user type'),
+                Text('• Login again with your credentials'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Clear form
+                  passwordController.clear();
+                  // Auto-select correct user type
+                  setState(() {
+                    userType = actualType;
+                  });
+                },
+                child: Text('OK, I\'LL FIX IT'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Add success snackbar
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 
   bool _validateForm() {

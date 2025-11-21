@@ -16,6 +16,7 @@ public class Resource {
     private String description;
     private String type;             // e.g., "notes", "books", "pastpapers"
     private String educationLevel;   // e.g., "Form 1", "Form 2", "University"
+    private String subLevel;
     private String subject;          // e.g., "Math", "Physics"
     private String fileUrl;          // path to uploaded file
     private String fileName;
@@ -25,12 +26,13 @@ public class Resource {
 
     public Resource() {}
 
-    public Resource(String title, String description, String type, String educationLevel, String subject,
+    public Resource(String title, String description, String type, String educationLevel,String subLevel, String subject,
                     String fileUrl, String fileName, String fileSize, String creator, LocalDateTime uploadedAt) {
         this.title = title;
         this.description = description;
         this.type = type;
         this.educationLevel = educationLevel;
+        this.subLevel = subLevel;
         this.subject = subject;
         this.fileUrl = fileUrl;
         this.fileName = fileName;
@@ -69,6 +71,14 @@ public class Resource {
 
     public String getCreator() { return creator; }
     public void setCreator(String creator) { this.creator = creator; }
+
+    public String getSubLevel() {
+        return subLevel;
+    }
+
+    public void setSubLevel(String subLevel) {
+        this.subLevel = subLevel;
+    }
 
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }

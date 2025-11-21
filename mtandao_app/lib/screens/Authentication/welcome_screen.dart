@@ -591,7 +591,10 @@ class WelcomePage extends StatelessWidget {
                               ),
                             );
                           },
-                          child: const Text('Sign Up Free'),
+                          child: const Text(
+                            'Sign Up Free',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
                       ),
                     ],

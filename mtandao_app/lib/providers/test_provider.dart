@@ -3,10 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mtandao_app/model/questions_model.dart';
+import 'package:mtandao_app/utils/constants.dart';
 import '../model/test_model.dart';
 
 class TestProvider with ChangeNotifier {
-  final String baseUrl = "https://your-backend-api.com/api/tests";
+  final String baseUrl = "${AppConstants.baseUrl}/tests";
 
   // ========= API DATA =========
   List<TestModel> _tests = [];

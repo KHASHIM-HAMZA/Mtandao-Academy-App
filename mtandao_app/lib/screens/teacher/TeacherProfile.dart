@@ -1,33 +1,278 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mtandao_app/services/Teacher_service.dart';
 
-class TeacherProfilePage extends StatelessWidget {
+class TeacherProfilePage extends StatefulWidget {
   const TeacherProfilePage({super.key});
 
   @override
+  State<TeacherProfilePage> createState() => _TeacherProfilePageState();
+}
+
+class _TeacherProfilePageState extends State<TeacherProfilePage> {
+  final TeacherService _teacherService = TeacherService();
+  final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
+
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _schoolController = TextEditingController();
+  final _qualificationController = TextEditingController();
+  final _experienceController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  Map<String, dynamic>? _teacherData;
+  bool _isLoading = true;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTeacherData();
+  }
+
+  Future<void> _fetchTeacherData() async {
+    try {
+      final data = await _teacherService.fetchCurrentTeacher();
+      if (data != null) {
+        setState(() {
+          _teacherData = data;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load teacher profile';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading profile: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Teacher statistics - you might want to fetch these from separate endpoints
+  Map<String, dynamic> get _teacherStats {
+    return {
+      'activeClassrooms': 3, // You'll need an API endpoint for this
+      'totalStudents': 45, // You'll need an API endpoint for this
+      'resourcesUploaded': 28, // You'll need an API endpoint for this
+      'quizzesCreated': 12, // You'll need an API endpoint for this
+    };
+  }
+
+  void _showEditProfileDialog() {
+    // Initialize controllers with current data
+    _emailController.text = _teacherData!['email'] ?? '';
+    _phoneController.text = _teacherData!['phoneNumber'] ?? '';
+    _schoolController.text = _teacherData!['school'] ?? '';
+    _qualificationController.text = _teacherData!['qualification'] ?? '';
+    _experienceController.text = _teacherData!['experience']?.toString() ?? '';
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: Row(
+                  children: [
+                    Icon(Icons.edit, color: primaryColor),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Edit Profile',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Email Field
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: InputDecoration(
+                            labelText: 'Email',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.email),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your email';
+                            }
+                            if (!value.contains('@')) {
+                              return 'Please enter a valid email';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Phone Field
+                        TextFormField(
+                          controller: _phoneController,
+                          decoration: InputDecoration(
+                            labelText: 'Phone Number',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.phone),
+                          ),
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 12),
+
+                        // School Field
+                        TextFormField(
+                          controller: _schoolController,
+                          decoration: InputDecoration(
+                            labelText: 'School',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.school),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Qualification Field
+                        TextFormField(
+                          controller: _qualificationController,
+                          decoration: InputDecoration(
+                            labelText: 'Qualification',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.school_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Experience Field
+                        TextFormField(
+                          controller: _experienceController,
+                          decoration: InputDecoration(
+                            labelText: 'Experience',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.work_outline),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel', style: GoogleFonts.poppins()),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                    ),
+                    onPressed: () => _saveProfileChanges(context),
+                    child: Text(
+                      'Save Changes',
+                      style: GoogleFonts.poppins(color: Colors.white),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+  }
+
+  void _saveProfileChanges(BuildContext context) async {
+    if (_formKey.currentState!.validate()) {
+      final profileData = {
+        'email': _emailController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'school': _schoolController.text.trim(),
+        'qualification': _qualificationController.text.trim(),
+        'experience': _experienceController.text.trim(),
+      };
+
+      try {
+        final success = await _teacherService.updateTeacherProfile(profileData);
+
+        if (success) {
+          Navigator.pop(context); // Close dialog
+          // Refresh the data
+          await _fetchTeacherData();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Profile updated successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update profile'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating profile: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-    // Fixed teacher data structure
-    final Map<String, dynamic> teacherData = {
-      'name': 'Dr. Sarah Johnson',
-      'email': 'sarah.johnson@mtandao.academy',
-      'phone': '+255 712 345 678',
-      'subjects': ['Mathematics', 'Physics'],
-      'qualification': 'MSc. Mathematics Education',
-      'experience': '8 years',
-      'school': 'Mlimani Secondary School',
-      'region': 'Dar es Salaam',
-      'joinDate': '2023-08-15',
-    };
+    if (_errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage, style: GoogleFonts.poppins(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _fetchTeacherData,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
 
-    // Teacher statistics
-    final Map<String, dynamic> teacherStats = {
-      'activeClassrooms': 3,
-      'totalStudents': 45,
-      'resourcesUploaded': 28,
-      'quizzesCreated': 12,
-    };
+    if (_teacherData == null) {
+      return Center(
+        child: Text(
+          'No teacher data found',
+          style: GoogleFonts.poppins(color: Colors.grey),
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -75,7 +320,7 @@ class TeacherProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  teacherData['name'] as String,
+                  _teacherData!['name'] ?? 'No Name',
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 22,
@@ -84,38 +329,58 @@ class TeacherProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  teacherData['qualification'] as String,
+                  _teacherData!['qualification'] ?? 'Qualification not set',
                   style: GoogleFonts.poppins(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children:
-                      (teacherData['subjects'] as List<String>)
-                          .map(
-                            (subject) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                subject,
-                                style: GoogleFonts.poppins(
-                                  color: Colors.white,
-                                  fontSize: 12,
+                if (_teacherData!['subjects'] != null &&
+                    (_teacherData!['subjects'] as List).isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    children:
+                        (_teacherData!['subjects'] as List<dynamic>)
+                            .map(
+                              (subject) => Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  subject.toString(),
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                ),
+                            )
+                            .toList(),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'No subjects assigned',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -157,25 +422,25 @@ class TeacherProfilePage extends StatelessWidget {
                   children: [
                     _buildTeacherStat(
                       'Active Classrooms',
-                      teacherStats['activeClassrooms'].toString(),
+                      _teacherStats['activeClassrooms'].toString(),
                       Icons.groups_outlined,
                       Colors.blue.shade600,
                     ),
                     _buildTeacherStat(
                       'Total Students',
-                      teacherStats['totalStudents'].toString(),
+                      _teacherStats['totalStudents'].toString(),
                       Icons.people_outlined,
                       Colors.green.shade600,
                     ),
                     _buildTeacherStat(
                       'Resources Uploaded',
-                      teacherStats['resourcesUploaded'].toString(),
+                      _teacherStats['resourcesUploaded'].toString(),
                       Icons.menu_book_outlined,
                       Colors.orange.shade600,
                     ),
                     _buildTeacherStat(
                       'Quizzes Created',
-                      teacherStats['quizzesCreated'].toString(),
+                      _teacherStats['quizzesCreated'].toString(),
                       Icons.quiz_outlined,
                       Colors.purple.shade600,
                     ),
@@ -215,27 +480,22 @@ class TeacherProfilePage extends StatelessWidget {
                 _buildInfoRow(
                   Icons.school_outlined,
                   'Qualification',
-                  teacherData['qualification'] as String,
+                  _teacherData!['qualification'] ?? 'Not specified',
                 ),
                 _buildInfoRow(
                   Icons.work_outline,
                   'Experience',
-                  teacherData['experience'] as String,
+                  _teacherData!['experience']?.toString() ?? 'Not specified',
                 ),
                 _buildInfoRow(
                   Icons.location_on_outlined,
                   'School',
-                  teacherData['school'] as String,
-                ),
-                _buildInfoRow(
-                  Icons.place_outlined,
-                  'Region',
-                  teacherData['region'] as String,
+                  _teacherData!['school'] ?? 'Not specified',
                 ),
                 _buildInfoRow(
                   Icons.calendar_today_outlined,
                   'Member Since',
-                  teacherData['joinDate'] as String,
+                  _formatDate(_teacherData!['joinDate']),
                 ),
               ],
             ),
@@ -271,12 +531,12 @@ class TeacherProfilePage extends StatelessWidget {
                 _buildInfoRow(
                   Icons.email_outlined,
                   'Email',
-                  teacherData['email'] as String,
+                  _teacherData!['email'] ?? 'No email',
                 ),
                 _buildInfoRow(
                   Icons.phone_outlined,
                   'Phone',
-                  teacherData['phone'] as String,
+                  _teacherData!['phoneNumber'] ?? 'No phone number',
                 ),
               ],
             ),
@@ -322,16 +582,15 @@ class TeacherProfilePage extends StatelessWidget {
                       Icons.edit_outlined,
                       Colors.blue.shade600,
                       () {
-                        // Edit profile
+                        // Edit profile - you'll need to implement this
+                        _showEditProfileDialog();
                       },
                     ),
                     _buildActionButton(
-                      'Change Password',
-                      Icons.lock_outlined,
+                      'Refresh Data',
+                      Icons.refresh_outlined,
                       Colors.green.shade600,
-                      () {
-                        // Change password
-                      },
+                      _fetchTeacherData,
                     ),
                     _buildActionButton(
                       'Settings',
@@ -346,7 +605,6 @@ class TeacherProfilePage extends StatelessWidget {
                       Icons.logout,
                       Colors.red.shade600,
                       () {
-                        // Logout
                         _showLogoutDialog(context);
                       },
                     ),
@@ -360,6 +618,23 @@ class TeacherProfilePage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null) return 'Not available';
+
+    try {
+      if (date is String) {
+        // Parse the date string - adjust format based on your API response
+        final parsedDate = DateTime.tryParse(date);
+        if (parsedDate != null) {
+          return '${parsedDate.day}/${parsedDate.month}/${parsedDate.year}';
+        }
+      }
+      return date.toString();
+    } catch (e) {
+      return 'Invalid date';
+    }
   }
 
   Widget _buildTeacherStat(
@@ -419,6 +694,7 @@ class TeacherProfilePage extends StatelessWidget {
             child: Text(
               value,
               style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -487,10 +763,12 @@ class TeacherProfilePage extends StatelessWidget {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () {
+                  // Implement logout logic here
+                  // You can use your AuthService to logout
                   Navigator.pushNamed(context, "/login");
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: const Text('you logged out!'),
+                      content: const Text('You logged out successfully!'),
                       behavior: SnackBarBehavior.floating,
                       backgroundColor: Colors.green,
                       shape: RoundedRectangleBorder(

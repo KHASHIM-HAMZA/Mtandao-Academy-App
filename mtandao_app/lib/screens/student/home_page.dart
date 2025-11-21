@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:mtandao_app/screens/student/exams.dart';
+import 'package:mtandao_app/screens/Help.dart';
+import 'package:provider/provider.dart';
+import 'package:mtandao_app/screens/student/Academic_Materials.dart';
 import 'package:mtandao_app/screens/student/profile_page.dart';
 import 'package:mtandao_app/screens/student/resources_page.dart';
+import 'package:mtandao_app/providers/student_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,16 +19,36 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
+  String? studentName;
 
   final List<Widget> _pages = [
     const HomeContent(),
     const StudentResourcesPage(),
-    const Exams(),
+    const AcademicMaterials(),
     const ProfilePage(),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadStudentName();
+    // Load student data when home page initializes
+    Future.microtask(() {
+      Provider.of<StudentProvider>(context, listen: false).loadStudentData();
+    });
+  }
+
+  Future<void> _loadStudentName() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      studentName = prefs.getString('name') ?? 'Student';
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final studentProvider = Provider.of<StudentProvider>(context);
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -143,7 +167,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(studentProvider: studentProvider),
       body: _pages[_currentIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -225,7 +249,7 @@ class _HomePageState extends State<HomePage> {
                     size: 22,
                   ),
                 ),
-                label: 'Exams',
+                label: 'Materials',
               ),
               BottomNavigationBarItem(
                 icon: Container(
@@ -278,7 +302,11 @@ class _HomePageState extends State<HomePage> {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () {
                   Navigator.pop(context);
-                  // Implement logout logic here
+                  // Clear student data on logout
+                  Provider.of<StudentProvider>(
+                    context,
+                    listen: false,
+                  ).clearStudentData();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Logged out successfully'),
@@ -303,6 +331,7 @@ class HomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final studentProvider = Provider.of<StudentProvider>(context);
     final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
     final banners = [
       'assets/primary1.png',
@@ -310,12 +339,19 @@ class HomeContent extends StatelessWidget {
       'assets/advance.png',
     ];
 
+    // Use real data or fallback to defaults
+    final studentName =
+        studentProvider.dashboardData?['studentName'] ?? 'Student';
+    final level = studentProvider.dashboardData?['level'] ?? 'O-Level';
+    final subLevel = studentProvider.dashboardData?['subLevel'] ?? 'Form 3';
+    final school = studentProvider.dashboardData?['school'] ?? 'Unknown School';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Welcome Section
+          // Welcome Section with real data
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -340,7 +376,7 @@ class HomeContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Karibu, Student! 👋',
+                        'Karibu, $studentName! 👋',
                         style: GoogleFonts.poppins(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
@@ -349,10 +385,18 @@ class HomeContent extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Continue your learning journey with personalized resources',
+                        '$level $subLevel • $school',
                         style: GoogleFonts.poppins(
                           color: Colors.white.withOpacity(0.9),
                           fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Continue your learning journey with personalized resources',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 12,
                         ),
                       ),
                     ],
@@ -446,33 +490,40 @@ class HomeContent extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Level Cards
+          // Level Cards - Updated to show student's actual level
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: LevelCard(
                   level: "Primary",
                   subtitle: "Std 1-7",
                   icon: Icons.people_outline,
                   color: Colors.orange,
+                  isCurrentLevel: level.toLowerCase().contains('primary'),
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: LevelCard(
                   level: "O-Level",
                   subtitle: "Form 1-4",
                   icon: Icons.school_outlined,
                   color: Colors.blue,
+                  isCurrentLevel:
+                      level.toLowerCase().contains('o-level') ||
+                      level.toLowerCase().contains('olevel'),
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: LevelCard(
                   level: "A-Level",
                   subtitle: "Form 5-6",
                   icon: Icons.auto_stories_outlined,
                   color: Colors.green,
+                  isCurrentLevel:
+                      level.toLowerCase().contains('a-level') ||
+                      level.toLowerCase().contains('alevel'),
                 ),
               ),
             ],
@@ -538,7 +589,6 @@ class HomeContent extends StatelessWidget {
             ],
           ),
 
-          // FIXED: Added bottom padding to prevent overflow
           const SizedBox(height: 20),
         ],
       ),
@@ -546,11 +596,13 @@ class HomeContent extends StatelessWidget {
   }
 }
 
+// Updated LevelCard with ConstrainedBox solution
 class LevelCard extends StatelessWidget {
   final String level;
   final String subtitle;
   final IconData icon;
   final Color color;
+  final bool isCurrentLevel;
 
   const LevelCard({
     super.key,
@@ -558,6 +610,7 @@ class LevelCard extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.color,
+    this.isCurrentLevel = false,
   });
 
   @override
@@ -565,9 +618,12 @@ class LevelCard extends StatelessWidget {
     return Container(
       height: 120,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: isCurrentLevel ? color.withOpacity(0.2) : color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(
+          color: isCurrentLevel ? color : color.withOpacity(0.3),
+          width: isCurrentLevel ? 2 : 1,
+        ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -582,28 +638,291 @@ class LevelCard extends StatelessWidget {
             child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(height: 8),
-          Text(
-            level,
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: color,
-              fontSize: 14,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              level,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                color: color,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: GoogleFonts.poppins(
-              color: Colors.grey.shade600,
-              fontSize: 11,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              subtitle,
+              style: GoogleFonts.poppins(
+                color: Colors.grey.shade600,
+                fontSize: 11,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (isCurrentLevel) ...[
+            const SizedBox(height: 4),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 40, maxWidth: 60),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    'Current',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
+// Updated AppDrawer to use real student data
+class AppDrawer extends StatelessWidget {
+  final StudentProvider studentProvider;
+
+  const AppDrawer({super.key, required this.studentProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
+    final studentData = studentProvider.dashboardData ?? {};
+    final studentName = studentData['studentName'] ?? 'Student';
+    final level = studentData['level'] ?? 'O-Level';
+    final subLevel = studentData['subLevel'] ?? 'Form 3';
+    final school = studentData['school'] ?? 'Unknown School';
+
+    return Drawer(
+      backgroundColor: Colors.white,
+      child: Column(
+        children: [
+          // Header with real student data
+          Container(
+            height: 200,
+            width: 500,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [primaryColor, primaryColor.withOpacity(0.8)],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/user.png',
+                        fit: BoxFit.cover,
+                        errorBuilder:
+                            (context, error, stackTrace) => Container(
+                              color: Colors.white,
+                              child: Icon(
+                                Icons.person,
+                                color: primaryColor,
+                                size: 35,
+                              ),
+                            ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    studentName,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$level $subLevel • $school',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Menu Items
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(top: 20),
+              children: [
+                _DrawerItem(
+                  icon: Icons.dashboard_outlined,
+                  title: 'Dashboard',
+                  onTap: () {},
+                ),
+                _DrawerItem(
+                  icon: Icons.menu_book_outlined,
+                  title: 'My Courses',
+                  onTap: () {
+                    Navigator.pushNamed(context, "/resources");
+                  },
+                ),
+                _DrawerItem(
+                  icon: Icons.assignment_outlined,
+                  title: 'Assignments',
+                  onTap: () {},
+                ),
+                _DrawerItem(
+                  icon: Icons.quiz_outlined,
+                  title: 'Practice Tests',
+                  onTap: () {},
+                ),
+                _DrawerItem(
+                  icon: Icons.analytics_outlined,
+                  title: 'Progress Report',
+                  onTap: () {},
+                ),
+                const Divider(indent: 20, endIndent: 20),
+                _DrawerItem(
+                  icon: Icons.help_outline,
+                  title: 'Help & Support',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => HelpSupportPage(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(indent: 20, endIndent: 20),
+                _DrawerItem(
+                  icon: Icons.logout,
+                  title: 'Logout',
+                  color: Colors.red,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showLogoutDialog(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.logout, color: Colors.red),
+                SizedBox(width: 10),
+                Text('Logout'),
+              ],
+            ),
+            content: const Text(
+              'Are you sure you want to logout from your account?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () {
+                  Navigator.pop(context);
+                  studentProvider.clearStudentData();
+                  Navigator.pushNamed(context, "/login");
+                },
+                child: const Text(
+                  'Logout',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+}
+
+class _DrawerItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _DrawerItem({
+    required this.icon,
+    required this.title,
+    this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: color ?? Colors.grey.shade700),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: color ?? Colors.black87,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+// SubjectCard remains the same
 class SubjectCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -667,225 +986,6 @@ class SubjectCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
-
-    return Drawer(
-      backgroundColor: Colors.white,
-      child: Column(
-        children: [
-          // Header - FIXED: Better profile picture container
-          Container(
-            height: 200,
-            width: 500,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [primaryColor, primaryColor.withOpacity(0.8)],
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // FIXED: Better profile container without white background issues
-                  Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/user.png',
-                        fit: BoxFit.cover,
-                        errorBuilder:
-                            (context, error, stackTrace) => Container(
-                              color: Colors.white,
-                              child: Icon(
-                                Icons.person,
-                                color: primaryColor,
-                                size: 35,
-                              ),
-                            ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Student',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 18,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Form 3 Student',
-                    style: GoogleFonts.poppins(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Menu Items
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(top: 20),
-              children: [
-                _DrawerItem(
-                  icon: Icons.dashboard_outlined,
-                  title: 'Dashboard',
-                  onTap: () {},
-                ),
-                _DrawerItem(
-                  icon: Icons.menu_book_outlined,
-                  title: 'My Courses',
-                  onTap: () {
-                    Navigator.pushNamed(context, "/resources");
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.assignment_outlined,
-                  title: 'Assignments',
-                  onTap: () {},
-                ),
-                _DrawerItem(
-                  icon: Icons.quiz_outlined,
-                  title: 'Practice Tests',
-                  onTap: () {},
-                ),
-                _DrawerItem(
-                  icon: Icons.analytics_outlined,
-                  title: 'Progress Report',
-                  onTap: () {},
-                ),
-                const Divider(indent: 20, endIndent: 20),
-                _DrawerItem(
-                  icon: Icons.campaign_outlined,
-                  title: 'Announcements',
-                  onTap: () {},
-                ),
-                _DrawerItem(
-                  icon: Icons.settings_outlined,
-                  title: 'Settings',
-                  onTap: () {},
-                ),
-                _DrawerItem(
-                  icon: Icons.help_outline,
-                  title: 'Help & Support',
-                  onTap: () {},
-                ),
-                const Divider(indent: 20, endIndent: 20),
-                _DrawerItem(
-                  icon: Icons.logout,
-                  title: 'Logout',
-                  color: Colors.red,
-                  onTap: () {
-                    Navigator.pop(context);
-                    // Show logout dialog
-                    _showLogoutDialog(context);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: const Row(
-              children: [
-                Icon(Icons.logout, color: Colors.red),
-                SizedBox(width: 10),
-                Text('Logout'),
-              ],
-            ),
-            content: const Text(
-              'Are you sure you want to logout from your account?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, "/login");
-                },
-                child: const Text(
-                  'Logout',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          ),
-    );
-  }
-}
-
-class _DrawerItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const _DrawerItem({
-    required this.icon,
-    required this.title,
-    this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: color ?? Colors.grey.shade700),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: color ?? Colors.black87,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      onTap: onTap,
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:mtandao_app/providers/student_provider.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -10,69 +12,455 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
+  final _formKey = GlobalKey<FormState>();
+  TextEditingController _nameController = TextEditingController();
+  TextEditingController _emailController = TextEditingController();
+  TextEditingController _phoneController = TextEditingController();
+  TextEditingController _schoolController = TextEditingController();
 
-  // Mock user data - replace with actual data from your backend
-  final Map<String, dynamic> _userData = {
-    'name': 'John Student',
-    'email': 'john.student@mtandao.academy',
-    'phone': '+255 789 456 123',
-    'level': 'O-Level',
-    'grade': 'Form 3',
-    'school': 'Mlimani Secondary School',
-    'region': 'Dar es Salaam',
-    'joinDate': '2024-01-15',
-    'profileImage': 'assets/user.png',
+  // Education level options
+  final List<String> levelOptions = ['Primary', 'O-Level', 'A-Level'];
+  final Map<String, List<String>> gradeOptions = {
+    'Primary': [
+      'Standard 1',
+      'Standard 2',
+      'Standard 3',
+      'Standard 4',
+      'Standard 5',
+      'Standard 6',
+      'Standard 7',
+    ],
+    'O-Level': ['Form 1', 'Form 2', 'Form 3', 'Form 4'],
+    'A-Level': ['Form 5', 'Form 6'],
   };
 
-  // Mock subscription data
+  String? _selectedLevel;
+  String? _selectedGrade;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudentData();
+  }
+
+  void _loadStudentData() {
+    final provider = Provider.of<StudentProvider>(context, listen: false);
+    if (provider.studentProfile == null) {
+      provider.loadStudentData();
+    }
+  }
+
+  // Helper method to extract user data from API response
+  Map<String, dynamic> _getUserData(
+    Map<String, dynamic>? profile,
+    Map<String, dynamic>? dashboard,
+  ) {
+    if (profile == null && dashboard == null) {
+      return {
+        'name': 'Loading...',
+        'email': 'Loading...',
+        'phone': 'Not provided',
+        'level': 'Loading...',
+        'grade': 'Loading...',
+        'school': 'Loading...',
+        'region': 'Not specified',
+        'joinDate': 'Loading...',
+        'profileImage': 'assets/user.png',
+      };
+    }
+
+    // Extract data from profile or dashboard
+    final user = profile ?? dashboard;
+
+    // Get level and grade, ensure they match dropdown options
+    String level = user?['level'] ?? dashboard?['level'] ?? 'Primary';
+    String grade =
+        user?['subLevel'] ??
+        user?['grade'] ??
+        dashboard?['subLevel'] ??
+        'Standard 1';
+
+    // Validate level and grade against available options
+    if (!levelOptions.contains(level)) {
+      level = 'Primary'; // Default to Primary if level is invalid
+    }
+
+    final availableGrades = gradeOptions[level] ?? gradeOptions['Primary']!;
+    if (!availableGrades.contains(grade)) {
+      grade =
+          availableGrades.first; // Default to first grade if grade is invalid
+    }
+
+    return {
+      'name': user?['name'] ?? user?['studentName'] ?? 'Student',
+      'email': user?['email'] ?? 'No email provided',
+      'phone': user?['phone'] ?? user?['phoneNumber'] ?? 'Not provided',
+      'level': level,
+      'subLevel': grade,
+      'school': user?['school'] ?? dashboard?['school'] ?? 'Not specified',
+      'region': user?['region'] ?? 'Not specified',
+      'joinDate': user?['joinDate'] ?? user?['createdAt'] ?? 'Unknown',
+      'profileImage': 'assets/user.png',
+    };
+  }
+
+  // Mock subscription data (to be implemented later)
   final Map<String, dynamic> _subscriptionData = {
-    'isActive': true,
-    'plan': 'Monthly Plan',
-    'startDate': '2025-02-01',
-    'endDate': '2025-03-01',
-    'remainingDays': 15,
-    'autoRenew': true,
+    'isActive': false,
+    'plan': 'No Active Plan',
+    'startDate': 'N/A',
+    'endDate': 'N/A',
+    'remainingDays': 0,
+    'autoRenew': false,
   };
 
-  // Mock learning statistics
-  // final Map<String, dynamic> _learningStats = {
-  //   'totalResourcesDownloaded': 24,
-  //   'totalStudyTime': '45h 30m',
-  //   'subjectsStudied': 8,
-  //   'testsCompleted': 12,
-  //   'averageScore': 78.5,
-  // };
+  void _openEditProfileDialog(Map<String, dynamic> userData) {
+    // Initialize controllers with current data
+    _nameController.text = userData['name'];
+    _emailController.text = userData['email'];
+    _phoneController.text = userData['phone'];
+    _schoolController.text = userData['school'];
+
+    // Set selected level and grade, ensuring they exist in options
+    _selectedLevel = userData['level'];
+    _selectedGrade = userData['subLevel'];
+
+    // Validate selected level and grade
+    if (!levelOptions.contains(_selectedLevel)) {
+      _selectedLevel = 'Primary';
+    }
+
+    final availableGrades =
+        gradeOptions[_selectedLevel] ?? gradeOptions['Primary']!;
+    if (!availableGrades.contains(_selectedGrade)) {
+      _selectedGrade = availableGrades.first;
+    }
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: Row(
+                  children: [
+                    Icon(Icons.edit, color: primaryColor),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Edit Profile',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            labelText: 'Full Name',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.person),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your name';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: InputDecoration(
+                            labelText: 'Email',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.email),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your email';
+                            }
+                            if (!value.contains('@')) {
+                              return 'Please enter a valid email';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _phoneController,
+                          decoration: InputDecoration(
+                            labelText: 'Phone Number',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.phone),
+                          ),
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _schoolController,
+                          decoration: InputDecoration(
+                            labelText: 'School',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.school),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: _selectedLevel,
+                          decoration: InputDecoration(
+                            labelText: 'Education Level',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.school),
+                          ),
+                          items:
+                              levelOptions.map((level) {
+                                return DropdownMenuItem(
+                                  value: level,
+                                  child: Text(level),
+                                );
+                              }).toList(),
+                          onChanged: (value) {
+                            setDialogState(() {
+                              _selectedLevel = value!;
+                              // Reset grade when level changes
+                              final availableGrades =
+                                  gradeOptions[_selectedLevel] ??
+                                  gradeOptions['Primary']!;
+                              _selectedGrade = availableGrades.first;
+                            });
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please select education level';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: _selectedGrade,
+                          decoration: InputDecoration(
+                            labelText: 'Grade/Class',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            prefixIcon: Icon(Icons.grade),
+                          ),
+                          items:
+                              (gradeOptions[_selectedLevel] ??
+                                      gradeOptions['Primary']!)
+                                  .map((grade) {
+                                    return DropdownMenuItem(
+                                      value: grade,
+                                      child: Text(grade),
+                                    );
+                                  })
+                                  .toList(),
+                          onChanged: (value) {
+                            setDialogState(() {
+                              _selectedGrade = value!;
+                            });
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please select grade/class';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('Cancel', style: GoogleFonts.poppins()),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                    ),
+                    onPressed: () => _saveProfileChanges(context),
+                    child: Text(
+                      'Save Changes',
+                      style: GoogleFonts.poppins(color: Colors.white),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+  }
+
+  void _saveProfileChanges(BuildContext context) async {
+    if (_formKey.currentState!.validate()) {
+      final provider = Provider.of<StudentProvider>(context, listen: false);
+
+      final profileData = {
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
+        'school': _schoolController.text.trim(),
+        'level': _selectedLevel ?? 'Primary',
+        'sub_level': _selectedGrade ?? 'Standard 1',
+      };
+
+      try {
+        final success = await provider.updateStudentProfile(profileData);
+
+        if (success) {
+          Navigator.pop(context); // Close dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Profile updated successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update profile: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Profile Header Section
-            _buildProfileHeader(),
+      body: Consumer<StudentProvider>(
+        builder: (context, provider, child) {
+          final userData = _getUserData(
+            provider.studentProfile,
+            provider.dashboardData,
+          );
 
-            // Subscription Status Card
-            _buildSubscriptionCard(),
+          if (provider.isLoading) {
+            return _buildLoadingState();
+          }
 
-            // Learning Statistics
-            // _buildStatisticsSection(),
+          if (provider.errorMessage != null) {
+            return _buildErrorState(provider);
+          }
 
-            // Account Information
-            _buildAccountInfoSection(),
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                // Profile Header Section
+                _buildProfileHeader(userData),
 
-            // Quick Actions
-            _buildQuickActionsSection(),
+                // Subscription Status Card
+                _buildSubscriptionCard(),
 
-            const SizedBox(height: 20),
-          ],
-        ),
+                // Account Information
+                _buildAccountInfoSection(userData, provider),
+
+                // Quick Actions
+                _buildQuickActionsSection(userData),
+
+                const SizedBox(height: 20),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              Color.fromARGB(255, 27, 88, 138),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Loading your profile...',
+            style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(StudentProvider provider) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
+          const SizedBox(height: 16),
+          Text(
+            'Failed to load profile',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            provider.errorMessage ?? 'Unknown error occurred',
+            style: GoogleFonts.poppins(color: Colors.grey[500], fontSize: 14),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () => provider.loadStudentData(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(
+              'Try Again',
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileHeader(Map<String, dynamic> userData) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -109,7 +497,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 child: ClipOval(
                   child: Image.asset(
-                    _userData['profileImage'],
+                    userData['profileImage'],
                     fit: BoxFit.cover,
                     errorBuilder:
                         (context, error, stackTrace) => Container(
@@ -126,22 +514,29 @@ class _ProfilePageState extends State<ProfilePage> {
               Positioned(
                 bottom: 0,
                 right: 0,
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: primaryColor, width: 2),
+                child: GestureDetector(
+                  onTap: _editProfilePicture,
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: primaryColor, width: 2),
+                    ),
+                    child: Icon(
+                      Icons.camera_alt,
+                      color: primaryColor,
+                      size: 16,
+                    ),
                   ),
-                  child: Icon(Icons.edit, color: primaryColor, size: 16),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
           Text(
-            _userData['name'],
+            userData['name'],
             style: GoogleFonts.poppins(
               color: Colors.white,
               fontSize: 22,
@@ -150,7 +545,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           const SizedBox(height: 4),
           Text(
-            _userData['email'],
+            userData['email'],
             style: GoogleFonts.poppins(
               color: Colors.white.withOpacity(0.9),
               fontSize: 14,
@@ -164,7 +559,7 @@ class _ProfilePageState extends State<ProfilePage> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              '${_userData['grade']} • ${_userData['level']}',
+              '${userData['subLevel']} • ${userData['level']}',
               style: GoogleFonts.poppins(
                 color: Colors.white,
                 fontSize: 12,
@@ -219,7 +614,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  _subscriptionData['isActive'] ? 'ACTIVE' : 'EXPIRED',
+                  _subscriptionData['isActive'] ? 'ACTIVE' : 'INACTIVE',
                   style: GoogleFonts.poppins(
                     color:
                         _subscriptionData['isActive']
@@ -250,55 +645,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ],
           ),
           const SizedBox(height: 12),
-          // Remaining Time Progress
-          _buildRemainingTimeProgress(),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Started',
-                      style: GoogleFonts.poppins(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      _formatDate(_subscriptionData['startDate']),
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Expires',
-                      style: GoogleFonts.poppins(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      _formatDate(_subscriptionData['endDate']),
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          _buildSubscriptionMessage(),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -310,12 +657,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              onPressed: () {
-                // Navigate to subscription page
-                _manageSubscription();
-              },
+              onPressed: _manageSubscription,
               child: Text(
-                'Manage Subscription',
+                'Get Subscription',
                 style: GoogleFonts.poppins(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -328,151 +672,25 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildRemainingTimeProgress() {
-    final totalDays = _calculateTotalDays();
-    final remainingDays = _subscriptionData['remainingDays'];
-    final progress = remainingDays / totalDays;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Remaining Time',
-              style: GoogleFonts.poppins(
-                color: Colors.grey.shade600,
-                fontSize: 14,
-              ),
-            ),
-            Text(
-              '$remainingDays days left',
-              style: GoogleFonts.poppins(
-                color: primaryColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(
-          value: progress,
-          backgroundColor: Colors.grey.shade200,
-          valueColor: AlwaysStoppedAnimation<Color>(
-            progress > 0.3 ? Colors.green.shade600 : Colors.orange.shade600,
-          ),
-          borderRadius: BorderRadius.circular(10),
-          minHeight: 8,
-        ),
-      ],
-    );
-  }
-
-  int _calculateTotalDays() {
-    // Calculate total subscription days
-    return 30; // For monthly plan
-  }
-
-  // Widget _buildStatisticsSection() {
-  //   return Container(
-  //     margin: const EdgeInsets.symmetric(horizontal: 16),
-  //     padding: const EdgeInsets.all(20),
-  //     decoration: BoxDecoration(
-  //       color: Colors.white,
-  //       borderRadius: BorderRadius.circular(20),
-  //       boxShadow: [
-  //         BoxShadow(
-  //           color: Colors.black.withOpacity(0.05),
-  //           blurRadius: 10,
-  //           offset: const Offset(0, 4),
-  //         ),
-  //       ],
-  //     ),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         // Text(
-  //         //   'Learning Statistics',
-  //         //   style: GoogleFonts.poppins(
-  //         //     fontSize: 18,
-  //         //     fontWeight: FontWeight.w600,
-  //         //     color: Colors.black87,
-  //         //   ),
-  //         // ),
-  //         // const SizedBox(height: 16),
-  //         // GridView.count(
-  //         //   shrinkWrap: true,
-  //         //   physics: const NeverScrollableScrollPhysics(),
-  //         //   crossAxisCount: 2,
-  //         //   childAspectRatio: 1.8,
-  //         //   crossAxisSpacing: 12,
-  //         //   mainAxisSpacing: 12,
-  //         //   children: [
-  //         //     _buildStatCard(
-  //         //       'Resources Downloaded',
-  //         //       _learningStats['totalResourcesDownloaded'].toString(),
-  //         //       Icons.download_outlined,
-  //         //       Colors.blue.shade600,
-  //         //     ),
-  //         //     _buildStatCard(
-  //         //       'Study Time',
-  //         //       _learningStats['totalStudyTime'],
-  //         //       Icons.access_time_outlined,
-  //         //       Colors.green.shade600,
-  //         //     ),
-  //         //     _buildStatCard(
-  //         //       'Subjects Studied',
-  //         //       _learningStats['subjectsStudied'].toString(),
-  //         //       Icons.menu_book_outlined,
-  //         //       Colors.orange.shade600,
-  //         //     ),
-  //         //     _buildStatCard(
-  //         //       'Average Score',
-  //         //       '${_learningStats['averageScore']}%',
-  //         //       Icons.bar_chart_outlined,
-  //         //       Colors.purple.shade600,
-  //         //     ),
-  //       ],
-  //     ),
-  //     //   ],
-  //     // ),
-  //   );
-  // }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildSubscriptionMessage() {
     return Container(
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
       padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              color: Colors.grey.shade600,
+          Icon(Icons.info_outline, color: Colors.blue.shade600, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Subscribe to access premium features and download resources',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.blue.shade800,
+              ),
             ),
           ),
         ],
@@ -480,7 +698,10 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildAccountInfoSection() {
+  Widget _buildAccountInfoSection(
+    Map<String, dynamic> userData,
+    StudentProvider provider,
+  ) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -498,33 +719,42 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Account Information',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Account Information',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.edit, color: primaryColor, size: 20),
+                onPressed: () => _openEditProfileDialog(userData),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
-          _buildInfoRow(Icons.person_outline, 'Full Name', _userData['name']),
-          _buildInfoRow(Icons.email_outlined, 'Email', _userData['email']),
-          _buildInfoRow(Icons.phone_outlined, 'Phone', _userData['phone']),
+          _buildInfoRow(Icons.person_outline, 'Full Name', userData['name']),
+          _buildInfoRow(Icons.email_outlined, 'Email', userData['email']),
+          _buildInfoRow(Icons.phone_outlined, 'Phone', userData['phone']),
           _buildInfoRow(
             Icons.school_outlined,
             'Education Level',
-            '${_userData['grade']} - ${_userData['level']}',
+            '${userData['subLevel']} - ${userData['level']}',
           ),
           _buildInfoRow(
             Icons.location_on_outlined,
             'School',
-            _userData['school'],
+            userData['school'],
           ),
-          _buildInfoRow(Icons.place_outlined, 'Region', _userData['region']),
+          _buildInfoRow(Icons.place_outlined, 'Region', userData['region']),
           _buildInfoRow(
             Icons.calendar_today_outlined,
             'Member Since',
-            _formatDate(_userData['joinDate']),
+            _formatDate(userData['joinDate']),
           ),
         ],
       ),
@@ -564,7 +794,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildQuickActionsSection() {
+  Widget _buildQuickActionsSection(Map<String, dynamic> userData) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
@@ -603,7 +833,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 'Edit Profile',
                 Icons.edit_outlined,
                 Colors.blue,
-                _editProfile,
+                () => _openEditProfileDialog(userData),
               ),
               _buildActionButton(
                 'Change Password',
@@ -673,16 +903,27 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   String _formatDate(String dateString) {
-    // Simple date formatting - you can use intl package for better formatting
-    return dateString; // Replace with proper formatting
+    try {
+      // Handle different date formats from API
+      if (dateString.contains('T')) {
+        dateString = dateString.split('T')[0];
+      }
+
+      final parts = dateString.split('-');
+      if (parts.length == 3) {
+        return '${parts[2]}/${parts[1]}/${parts[0]}';
+      }
+      return dateString;
+    } catch (e) {
+      return dateString;
+    }
   }
 
   // Action Methods
   void _manageSubscription() {
-    // Navigate to subscription management page
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Redirecting to subscription management...'),
+        content: const Text('Redirecting to subscription plans...'),
         backgroundColor: primaryColor,
         behavior: SnackBarBehavior.floating,
       ),
@@ -690,11 +931,10 @@ class _ProfilePageState extends State<ProfilePage> {
     Navigator.pushNamed(context, "/payment");
   }
 
-  void _editProfile() {
-    // Navigate to edit profile page
+  void _editProfilePicture() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Opening profile editor...'),
+        content: Text('Profile picture update coming soon...'),
         backgroundColor: Colors.blue,
         behavior: SnackBarBehavior.floating,
       ),
@@ -702,10 +942,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _changePassword() {
-    // Navigate to change password page
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Opening password changer...'),
+        content: Text('Password change feature coming soon...'),
         backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
       ),
@@ -713,10 +952,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _viewProgress() {
-    // Navigate to progress page
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Opening study progress...'),
+        content: Text('Study progress tracking coming soon...'),
         backgroundColor: Colors.orange,
         behavior: SnackBarBehavior.floating,
       ),
@@ -724,10 +962,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _helpSupport() {
-    // Navigate to help & support
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Opening help & support...'),
+        content: Text('Help & support feature coming soon...'),
         backgroundColor: Colors.purple,
         behavior: SnackBarBehavior.floating,
       ),
@@ -735,10 +972,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _openSettings() {
-    // Navigate to settings
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Opening settings...'),
+        content: Text('Settings feature coming soon...'),
         backgroundColor: Colors.grey,
         behavior: SnackBarBehavior.floating,
       ),
@@ -773,7 +1009,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 onPressed: () {
                   Navigator.pop(context);
                   Navigator.pushNamed(context, "/login");
-                  // Implement logout logic
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Logged out successfully'),
@@ -789,5 +1024,14 @@ class _ProfilePageState extends State<ProfilePage> {
             ],
           ),
     );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _schoolController.dispose();
+    super.dispose();
   }
 }

@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mtandao_app/model/resource_model.dart';
 import 'package:mtandao_app/providers/resource_provder.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TeacherUploadResourcePage extends StatefulWidget {
   const TeacherUploadResourcePage({super.key});
@@ -19,28 +21,75 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
   final _descController = TextEditingController();
   String? _selectedType;
   String? _selectedLevel;
+  String? _selectedSubject;
+  String? _selectedSubLevel;
+
   File? _file;
   bool _isUploading = false;
 
   final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
   final levels = ['primary', 'olevel', 'alevel'];
   final types = ['books', 'notes'];
+  List<String> teacherSubjects = [];
+
+  final Map<String, List<String>> subLevels = {
+    'primary': [
+      'Standard 1',
+      'Standard 2',
+      'Standard 3',
+      'Standard 4',
+      'Standard 5',
+      'Standard 6',
+      'Standard 7',
+    ],
+    'olevel': ['Form 1', 'Form 2', 'Form 3', 'Form 4'],
+    'alevel': ['Form 5', 'Form 6'],
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeacherSubjects();
+  }
+
+  Future<void> _loadTeacherSubjects() async {
+    final prefs = await SharedPreferences.getInstance();
+    final subjectsString = prefs.getString('subjects');
+    if (subjectsString != null && subjectsString.isNotEmpty) {
+      setState(() {
+        teacherSubjects = List<String>.from(json.decode(subjectsString));
+        if (teacherSubjects.isNotEmpty) {
+          _selectedSubject = teacherSubjects[0];
+        }
+      });
+    }
+  }
 
   void _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'],
-      allowMultiple: false,
-    );
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'],
+        allowMultiple: false,
+      );
 
-    if (result != null && result.files.single.path != null) {
-      setState(() => _file = File(result.files.single.path!));
+      if (result != null && result.files.single.path != null) {
+        setState(() => _file = File(result.files.single.path!));
+      }
+    } catch (e) {
+      _showErrorDialog('File selection failed: $e');
     }
   }
 
   void _upload() async {
-    if (_file == null || _selectedType == null || _selectedLevel == null) {
-      _showErrorDialog('Please fill all fields and select a file');
+    if (_file == null ||
+        _selectedType == null ||
+        _selectedLevel == null ||
+        _selectedSubLevel == null || // NEW REQUIRED FIELD
+        _selectedSubject == null) {
+      _showErrorDialog(
+        'Please fill all fields including sub-level and select a file',
+      );
       return;
     }
 
@@ -58,19 +107,24 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
         description: _descController.text.trim(),
         type: _selectedType!,
         educationLevel: _selectedLevel!,
-        fileUrl: '', // backend will return actual URL
+        subLevel: _selectedSubLevel!, // ✅ NEW FIELD
+        subject: _selectedSubject!,
+        fileUrl: '', // backend will fill
+        creator: '', // provider fills teacher name
         createdAt: DateTime.now(),
-        subject: '',
-        teacherId: '',
       );
 
-      await Provider.of<ResourceProvider>(
+      final success = await Provider.of<ResourceProvider>(
         context,
         listen: false,
       ).uploadResource(_file!, resource);
 
-      _showSuccessDialog();
-      _resetForm();
+      if (success) {
+        _showSuccessDialog();
+        _resetForm();
+      } else {
+        _showErrorDialog('Upload failed. Please try again.');
+      }
     } catch (e) {
       _showErrorDialog('Upload failed: $e');
     } finally {
@@ -165,6 +219,7 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
       _file = null;
       _selectedType = null;
       _selectedLevel = null;
+      _selectedSubject = teacherSubjects.isNotEmpty ? teacherSubjects[0] : null;
     });
   }
 
@@ -186,6 +241,18 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
     }
   }
 
+  String _getFileSize() {
+    if (_file == null) return '';
+    final size = _file!.lengthSync();
+    if (size < 1024) {
+      return '${size} B';
+    } else if (size < 1048576) {
+      return '${(size / 1024).toStringAsFixed(1)} KB';
+    } else {
+      return '${(size / 1048576).toStringAsFixed(1)} MB';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -195,12 +262,13 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
           'Upload Resource',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: Colors.white,
           ),
         ),
-        backgroundColor: Color.fromARGB(255, 27, 88, 138),
+        backgroundColor: const Color.fromARGB(255, 27, 88, 138),
         elevation: 0,
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -255,7 +323,7 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Upload books, notes, and learning materials for your students. Supported formats: PDF, DOC, PNG, JPG',
+            'Upload books, notes, and learning materials for your students. Supported formats: PDF, DOC, PNG, JPG (Max 10MB)',
             style: GoogleFonts.poppins(
               color: Colors.grey.shade700,
               fontSize: 14,
@@ -275,7 +343,7 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
         // Title Field
         _buildTextField(
           controller: _titleController,
-          label: 'Resource Title',
+          label: 'Resource Title *',
           hintText: 'e.g., Mathematics Notes Chapter 1',
           icon: Icons.title,
         ),
@@ -291,31 +359,75 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
         ),
         const SizedBox(height: 20),
 
-        // Type and Level Selection
-        Row(
+        // Type, Level, and Subject Selection
+        Column(
           children: [
-            // Type Dropdown
-            Expanded(
-              child: _buildDropdown(
-                value: _selectedType,
-                items: types,
-                label: 'Resource Type',
-                icon: Icons.category,
-                onChanged: (value) => setState(() => _selectedType = value),
-              ),
-            ),
-            const SizedBox(width: 16),
+            Row(
+              children: [
+                // Type Dropdown
+                Expanded(
+                  child: _buildDropdown(
+                    value: _selectedType,
+                    items: types,
+                    label: 'Resource Type *',
+                    icon: Icons.category,
+                    onChanged: (value) => setState(() => _selectedType = value),
+                  ),
+                ),
+                const SizedBox(width: 16),
 
-            // Level Dropdown
-            Expanded(
-              child: _buildDropdown(
-                value: _selectedLevel,
-                items: levels,
-                label: 'Education Level',
-                icon: Icons.school,
-                onChanged: (value) => setState(() => _selectedLevel = value),
-              ),
+                // Level Dropdown
+                Expanded(
+                  child: _buildDropdown(
+                    value: _selectedLevel,
+                    items: levels,
+                    label: 'Education Level *',
+                    icon: Icons.school,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedLevel = value;
+                        _selectedSubLevel = null; // reset sub-level
+                      });
+                    },
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 20),
+
+            if (_selectedLevel != null)
+              _buildDropdown(
+                value: _selectedSubLevel,
+                items: subLevels[_selectedLevel]!,
+                label: 'Sub Level (Class) *',
+                icon: Icons.class_,
+                onChanged: (value) => setState(() => _selectedSubLevel = value),
+              ),
+
+            const SizedBox(height: 20),
+
+            // Subject Dropdown
+            if (teacherSubjects.isNotEmpty)
+              _buildDropdown(
+                value: _selectedSubject,
+                items: teacherSubjects,
+                label: 'Subject *',
+                icon: Icons.subject,
+                onChanged: (value) => setState(() => _selectedSubject = value),
+              )
+            else
+              _buildTextField(
+                controller: TextEditingController(),
+                label: 'Subject *',
+                hintText: 'Enter subject name',
+                icon: Icons.subject,
+                readOnly: true,
+                onTap: () {
+                  _showErrorDialog(
+                    'No subjects found. Please complete your profile setup.',
+                  );
+                },
+              ),
           ],
         ),
       ],
@@ -328,6 +440,8 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
     required String hintText,
     required IconData icon,
     int maxLines = 1,
+    bool readOnly = false,
+    VoidCallback? onTap,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,6 +471,8 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
             controller: controller,
             maxLines: maxLines,
             style: GoogleFonts.poppins(color: Colors.black87),
+            readOnly: readOnly,
+            onTap: onTap,
             decoration: InputDecoration(
               hintText: hintText,
               hintStyle: GoogleFonts.poppins(color: Colors.grey.shade500),
@@ -365,7 +481,7 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
                 borderSide: BorderSide.none,
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: readOnly ? Colors.grey.shade100 : Colors.white,
               prefixIcon: Icon(icon, color: primaryColor),
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 16,
@@ -426,7 +542,7 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
                   return DropdownMenuItem<String>(
                     value: item,
                     child: Text(
-                      item.toUpperCase(),
+                      _formatDropdownText(item),
                       style: GoogleFonts.poppins(
                         color: Colors.black87,
                         fontSize: 14,
@@ -439,10 +555,31 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
             dropdownColor: Colors.white,
             icon: Icon(Icons.arrow_drop_down, color: primaryColor),
             isExpanded: true,
+            hint: Text(
+              'Select $label',
+              style: GoogleFonts.poppins(color: Colors.grey.shade500),
+            ),
           ),
         ),
       ],
     );
+  }
+
+  String _formatDropdownText(String text) {
+    switch (text) {
+      case 'primary':
+        return 'Primary Level';
+      case 'olevel':
+        return 'O-Level';
+      case 'alevel':
+        return 'A-Level';
+      case 'books':
+        return 'Books';
+      case 'notes':
+        return 'Notes';
+      default:
+        return text;
+    }
   }
 
   Widget _buildFilePickerSection() {
@@ -450,7 +587,7 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Select File',
+          'Select File *',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             fontSize: 18,
@@ -513,9 +650,22 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    _getFileTypeIcon(),
-                    style: const TextStyle(fontSize: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _getFileTypeIcon(),
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _getFileSize(),
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey.shade500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ] else ...[
                   const SizedBox(height: 8),
@@ -540,6 +690,7 @@ class _TeacherUploadResourcePageState extends State<TeacherUploadResourcePage> {
         _file != null &&
         _selectedType != null &&
         _selectedLevel != null &&
+        _selectedSubject != null &&
         _titleController.text.trim().isNotEmpty;
 
     return SizedBox(

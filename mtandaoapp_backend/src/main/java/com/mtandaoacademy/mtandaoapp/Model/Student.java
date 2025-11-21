@@ -21,6 +21,8 @@ public class Student {
 
     private String level; // e.g., primary, olevel, alevel
 
+    private String sub_level; // e.g form 1, standard 7 etc
+
 
     // Getters & Setters
     public Long getId() { return id; }
@@ -38,4 +40,12 @@ public class Student {
     public String getLevel() { return level; }
 
     public void setLevel(String level) { this.level = level; }
+
+    public String getSub_level() {
+        return sub_level;
+    }
+
+    public void setSub_level(String sub_level) {
+        this.sub_level = sub_level;
+    }
 }

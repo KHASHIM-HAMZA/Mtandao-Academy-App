@@ -9,14 +9,20 @@ public class UserDTO {
     private String name;
     private String email;
     private Role role;
+    private String phoneNumber;
     private Object profile; // will hold either Student or Teacher data
 
-    public UserDTO(Long id, String name, String email, Role role, Object profile) {
+    public UserDTO(Long id, String name, String email,String phoneNumber, Role role, Object profile) {
         this.id = id;
         this.name = name;
         this.email = email;
+        this.phoneNumber = phoneNumber;
         this.role = role;
         this.profile = profile;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
     }
 
     // Getters only (optional setters)

@@ -2,48 +2,66 @@ class Resource {
   final String id;
   final String title;
   final String description;
+  final String type;
+  final String educationLevel;
+  final String subLevel;
   final String subject;
-  final String type; // "Book" or "Note"
-  final String educationLevel; // "Primary", "O-level", "A-level"
-  final String teacherId;
   final String fileUrl;
+  final String? fileName;
+  final String? fileSize;
+  final String creator;
   final DateTime createdAt;
 
   Resource({
+    required this.subLevel,
     required this.id,
     required this.title,
     required this.description,
-    required this.subject,
     required this.type,
     required this.educationLevel,
-    required this.teacherId,
+    required this.subject,
     required this.fileUrl,
+    this.fileName,
+    this.fileSize,
+    required this.creator,
     required this.createdAt,
   });
 
   factory Resource.fromJson(Map<String, dynamic> json) {
     return Resource(
-      id: json['_id'] ?? '',
+      id:
+          json['id']?.toString() ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
       title: json['title'] ?? '',
       description: json['description'] ?? '',
-      subject: json['subject'] ?? '',
       type: json['type'] ?? '',
       educationLevel: json['educationLevel'] ?? '',
-      teacherId: json['teacherId'] ?? '',
+      subLevel: json['sublevel'] ?? '',
+      subject: json['subject'] ?? '',
       fileUrl: json['fileUrl'] ?? '',
-      createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      fileName: json['fileName'],
+      fileSize: json['fileSize'],
+      creator: json['creator'] ?? '',
+      createdAt:
+          json['createdAt'] != null
+              ? DateTime.parse(json['createdAt'])
+              : DateTime.now(),
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    '_id': id,
-    'title': title,
-    'description': description,
-    'subject': subject,
-    'type': type,
-    'educationLevel': educationLevel,
-    'teacherId': teacherId,
-    'fileUrl': fileUrl,
-    'createdAt': createdAt.toIso8601String(),
-  };
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'type': type,
+      'educationLevel': educationLevel,
+      'subject': subject,
+      'fileUrl': fileUrl,
+      'fileName': fileName,
+      'fileSize': fileSize,
+      'creator': creator,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
 }

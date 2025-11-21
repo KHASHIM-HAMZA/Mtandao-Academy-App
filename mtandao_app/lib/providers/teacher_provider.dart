@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mtandao_app/model/resource_model.dart';
 import 'package:mtandao_app/model/test_model.dart';
+import 'package:mtandao_app/utils/constants.dart';
 
 class TeacherProvider with ChangeNotifier {
-  final String baseUrl = "https://your-backend-api.com/api";
+  final String baseUrl = AppConstants.baseUrl;
   final int teacherId;
 
   TeacherProvider(this.teacherId);

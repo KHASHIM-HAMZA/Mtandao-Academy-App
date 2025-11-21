@@ -30,6 +30,7 @@ public class ResourceController {
             @RequestParam("description") String description,
             @RequestParam("type") String type,
             @RequestParam("educationLevel") String educationLevel,
+            @RequestParam("sublevel") String subLevel,
             @RequestParam("subject") String subject,
             @RequestParam("creator") String creator
     ) throws IOException {
@@ -48,10 +49,10 @@ public class ResourceController {
         Path filePath = uploadPath.resolve(fileName);
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-        String fileUrl = "/files/" + fileName;  // Optional static resource URL mapping
+        String fileUrl = "/files/resources/" + fileName;  // Optional static resource URL mapping
 
         Resource resource = new Resource(
-                title, description, type, educationLevel, subject,
+                title, description, type, educationLevel,subLevel, subject,
                 fileUrl, fileName, (file.getSize() / 1024) + " KB",
                 creator, null
         );
@@ -82,6 +83,7 @@ public class ResourceController {
     }
 
     @GetMapping("/filter/creator/{creator}")
+    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
     public ResponseEntity<List<Resource>> filterByCreator(@PathVariable String creator) {
         return ResponseEntity.ok(resourceService.filterByCreator(creator));
     }

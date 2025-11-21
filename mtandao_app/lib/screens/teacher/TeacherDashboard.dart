@@ -1,7 +1,14 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mtandao_app/screens/Help.dart';
+import 'package:mtandao_app/screens/student/Academic_Materials.dart';
+import 'package:mtandao_app/screens/student/materials/past_papers.dart';
+import 'package:mtandao_app/screens/teacher/Teacher_Scheme.dart';
+import 'package:mtandao_app/screens/teacher/Teacher_Workspace.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mtandao_app/screens/teacher/TeacherPastPaperPage.dart';
 import 'package:mtandao_app/screens/teacher/history_page.dart';
-import 'package:mtandao_app/screens/teacher/online_test/Create_test_page.dart';
 import 'package:mtandao_app/screens/teacher/teacher_homepage.dart';
 import 'package:mtandao_app/screens/teacher/Teacher_resource_upload.dart';
 import 'package:mtandao_app/screens/teacher/TeacherProfile.dart';
@@ -17,14 +24,272 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   int _currentIndex = 0;
   final Color primaryColor = const Color.fromARGB(255, 27, 88, 138);
 
-  // Keep one instance of each page to preserve state
+  String? teacherName;
+  String? teacherEmail;
+  String? token;
+  List<String> teacherSubjects = [];
+  String? profileImageUrl;
+
   final List<Widget> _pages = const [
     TeacherHomePage(),
-    TeacherUploadResourcePage(),
-    CreateTestPage(),
+    TeachersWorkspace(),
+    AcademicMaterials(),
     TeacherProfilePage(),
     TeacherHistoryPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTeacherData();
+  }
+
+  Future<void> _loadTeacherData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      teacherName = prefs.getString('name') ?? 'Teacher';
+      teacherEmail = prefs.getString('email') ?? '';
+      token = prefs.getString('jwt_token');
+      profileImageUrl = prefs.getString('profileImage');
+
+      // Load subjects from shared preferences
+      final subjectsString = prefs.getString('subjects');
+      if (subjectsString != null && subjectsString.isNotEmpty) {
+        teacherSubjects = List<String>.from(json.decode(subjectsString));
+      }
+    });
+  }
+
+  void _updateSubjects(List<String> newSubjects) {
+    setState(() {
+      teacherSubjects = newSubjects;
+    });
+  }
+
+  // Method to navigate to specific pages
+  void _navigateToPage(Widget page, {String? routeName}) {
+    if (routeName != null) {
+      Navigator.pushNamed(context, routeName);
+    } else {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => page));
+    }
+  }
+
+  Widget _buildDrawerHeader() {
+    return DrawerHeader(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [primaryColor, primaryColor.withOpacity(0.8)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Profile Avatar
+          Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: ClipOval(
+                  child:
+                      profileImageUrl != null && profileImageUrl!.isNotEmpty
+                          ? Image.network(
+                            profileImageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder:
+                                (context, error, stackTrace) =>
+                                    _buildDefaultAvatar(),
+                          )
+                          : _buildDefaultAvatar(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      teacherName ?? 'Teacher',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      teacherEmail ?? '',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Subjects Preview
+          if (teacherSubjects.isNotEmpty) ...[
+            Text(
+              'My Subjects:',
+              style: GoogleFonts.poppins(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children:
+                  teacherSubjects.take(3).map((subject) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        subject,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 10,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+            ),
+            if (teacherSubjects.length > 3)
+              Text(
+                '+${teacherSubjects.length - 3} more',
+                style: GoogleFonts.poppins(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 10,
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultAvatar() {
+    return Container(
+      color: Colors.white,
+      child: Icon(Icons.person, color: primaryColor, size: 30),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    required int index,
+    bool isSelected = false,
+    bool isBottomNavItem = true,
+  }) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isSelected ? primaryColor : Colors.grey[700],
+        size: 22,
+      ),
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(
+          color: isSelected ? primaryColor : Colors.grey[700],
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          fontSize: 14,
+        ),
+      ),
+      trailing:
+          isSelected && isBottomNavItem
+              ? Icon(Icons.arrow_forward_ios, color: primaryColor, size: 16)
+              : null,
+      onTap: () {
+        Navigator.pop(context); // Close drawer
+
+        if (isBottomNavItem) {
+          // Navigate to bottom navigation pages
+          setState(() => _currentIndex = index);
+        } else {
+          // Navigate to other pages not in bottom nav
+          switch (title) {
+            case 'Scheme of Work':
+              _navigateToPage(const TeacherSchemePage());
+              break;
+            case 'help & support':
+              // Navigate to settings page
+              _navigateToPage(HelpSupportPage());
+              break;
+            case 'Past Papers & Corrections':
+              _navigateToPage(const PastPapers());
+            // Add more cases for other drawer items if needed
+          }
+        }
+      },
+    );
+  }
+
+  Widget _buildSubjectsDrawerItem() {
+    return ExpansionTile(
+      leading: Icon(Icons.subject_outlined, color: Colors.grey[700], size: 22),
+      title: Text(
+        'My Subjects',
+        style: GoogleFonts.poppins(
+          color: Colors.grey[700],
+          fontWeight: FontWeight.w400,
+          fontSize: 14,
+        ),
+      ),
+      children: [
+        if (teacherSubjects.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'No subjects assigned',
+              style: GoogleFonts.poppins(color: Colors.grey[500], fontSize: 12),
+            ),
+          )
+        else
+          ...teacherSubjects.map(
+            (subject) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.circle, size: 6, color: primaryColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      subject,
+                      style: GoogleFonts.poppins(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +320,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ),
             const SizedBox(width: 12),
             Text(
-              'Teacher Portal',
+              'Mtandao Academy',
               style: GoogleFonts.poppins(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -80,36 +345,102 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             ),
             onPressed: () {},
           ),
-          PopupMenuButton(
-            icon: Container(
-              padding: EdgeInsets.all(2),
-              decoration: BoxDecoration(shape: BoxShape.circle),
-              child: Icon(
-                Icons.more_vert_outlined,
-                size: 24,
-                color: Colors.white,
-              ),
-            ),
-            itemBuilder:
-                (context) => [
-                  PopupMenuItem(
-                    onTap: () {
-                      Navigator.pushNamed(context, "/settings");
-                    },
-                    child: Text("Settings"),
-                  ),
-                  PopupMenuItem(
-                    onTap: () {
-                      Navigator.pushNamed(context, "/login");
-                    },
-                    child: Text("Logout"),
-                  ),
-                ],
-          ),
         ],
       ),
+      drawer: Drawer(
+        child: Column(
+          children: [
+            _buildDrawerHeader(),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  // Bottom Navigation Items
+                  _buildDrawerItem(
+                    icon: Icons.dashboard_outlined,
+                    title: 'Dashboard',
+                    index: 0,
+                    isSelected: _currentIndex == 0,
+                  ),
+                  _buildDrawerItem(
+                    icon: Icons.upload_outlined,
+                    title: 'Upload Resources',
+                    index: 1,
+                    isSelected: _currentIndex == 1,
+                  ),
+                  _buildDrawerItem(
+                    icon: Icons.quiz_outlined,
+                    title: 'Past Papers & Corrections',
+                    index: 2,
+                    isSelected: _currentIndex == 2,
+                  ),
+                  _buildDrawerItem(
+                    icon: Icons.person_outlined,
+                    title: 'My Profile',
+                    index: 3,
+                    isSelected: _currentIndex == 3,
+                  ),
+                  _buildDrawerItem(
+                    icon: Icons.history_outlined,
+                    title: 'History',
+                    index: 4,
+                    isSelected: _currentIndex == 4,
+                  ),
 
-      // ✅ IndexedStack keeps all pages alive, preventing rebuilds
+                  const Divider(height: 20),
+
+                  // Additional Drawer Items (Not in Bottom Nav)
+                  _buildDrawerItem(
+                    icon: Icons.schedule_outlined,
+                    title: 'Scheme of Work',
+                    index: -1, // Not in bottom nav
+                    isSelected: false,
+                    isBottomNavItem: false,
+                  ),
+
+                  const Divider(height: 20),
+
+                  _buildSubjectsDrawerItem(),
+
+                  const Divider(height: 20),
+
+                  // Settings and Logout
+                  _buildDrawerItem(
+                    icon: Icons.help_outline,
+                    title: 'help & support',
+                    index: -1,
+                    isSelected: false,
+                    isBottomNavItem: false,
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.logout_outlined,
+                      color: Colors.red,
+                      size: 22,
+                    ),
+                    title: Text(
+                      'Logout',
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontSize: 14,
+                      ),
+                    ),
+                    onTap: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.clear(); // Logout completely
+                      if (mounted) {
+                        Navigator.pushReplacementNamed(context, "/login");
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // Keep all pages alive
       body: IndexedStack(index: _currentIndex, children: _pages),
 
       bottomNavigationBar: Container(
@@ -147,14 +478,14 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 label: 'Dashboard',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.upload_outlined),
-                activeIcon: Icon(Icons.upload, size: 30),
-                label: 'Upload',
+                icon: Icon(Icons.desk_outlined),
+                activeIcon: Icon(Icons.desk, size: 30),
+                label: 'WorkSpace',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.quiz_outlined),
-                activeIcon: Icon(Icons.quiz, size: 30),
-                label: 'Online Test',
+                icon: Icon(Icons.library_books_outlined),
+                activeIcon: Icon(Icons.library_books, size: 30),
+                label: "Materials",
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person_outlined),

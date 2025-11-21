@@ -2,19 +2,30 @@ package com.mtandaoacademy.mtandaoapp.Security.DTO;
 
 
 import com.mtandaoacademy.mtandaoapp.Model.Enums.Role;
+import jakarta.persistence.ElementCollection;
+
+import java.util.List;
 
 public class RegisterRequest {
     private String name;
     private String email;
+    private String phoneNumber;
     private String password;
     private Role role; // STUDENT / TEACHER / ADMIN
 
     // Student-specific fields (optional)
     private String school;
     private String level; // primary/olevel/alevel
+    private String sub_level;
 
     // Teacher fields (optional)
-    private String specialization;
+    private String qualification; // e.g. MSc. Mathematics Education
+
+    private String experience; // e.g. "8 years"
+
+    @ElementCollection
+    private List<String> subjects; // e.g. ["Mathematics", "Physics"]
+
 
     // getters/setters
 
@@ -67,11 +78,43 @@ public class RegisterRequest {
         this.level = level;
     }
 
-    public String getSpecialization() {
-        return specialization;
+    public String getPhoneNumber() {
+        return phoneNumber;
     }
 
-    public void setSpecialization(String specialization) {
-        this.specialization = specialization;
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+    }
+
+    public String getSub_level() {
+        return sub_level;
+    }
+
+    public void setSub_level(String sub_level) {
+        this.sub_level = sub_level;
+    }
+
+    public String getQualification() {
+        return qualification;
+    }
+
+    public void setQualification(String qualification) {
+        this.qualification = qualification;
+    }
+
+    public String getExperience() {
+        return experience;
+    }
+
+    public void setExperience(String experience) {
+        this.experience = experience;
+    }
+
+    public List<String> getSubjects() {
+        return subjects;
+    }
+
+    public void setSubjects(List<String> subjects) {
+        this.subjects = subjects;
     }
 }
