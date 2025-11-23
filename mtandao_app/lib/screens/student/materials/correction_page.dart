@@ -20,6 +20,7 @@ class CorrectionPage extends StatefulWidget {
 class _CorrectionPageState extends State<CorrectionPage>
     with SingleTickerProviderStateMixin {
   String selectedLevel = 'All';
+  String selectedSubLevel = 'All';
   String selectedType = 'All';
   String searchQuery = '';
   bool isLoading = false;
